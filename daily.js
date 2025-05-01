@@ -3,6 +3,7 @@ import dotenv from 'dotenv'
 import axios from 'axios'
 import { getStocksFromCSV } from './stocklist.js';
 const stocks = await getStocksFromCSV();
+//const stocks=['20Microns','360ONE']
 
 dotenv.config();
 const wpApiUrl=process.env.WP_API_DAILY; 
@@ -124,7 +125,7 @@ const scrape = async () => {
         // Set to track unique dates we've already processed
         const processedDates = new Set();
         
-        for (let i = 0; i < 20; i++) {
+        for (let i = 1; i < 20; i++) {
           try {
             bars[i].dispatchEvent(new MouseEvent('click', { bubbles: true }));
             console.log(`Clicked bar ${i+1}`);
@@ -174,7 +175,7 @@ const scrape = async () => {
         continue;
       }
       
-  it
+  
       for (const dayData of dailyData) {
         const wpData = { 
           stock: stock,
@@ -230,8 +231,6 @@ async function storeInWordPress(data) {
   }
 }
 
-if (process.argv[1] === import.meta.url) {
-  scrape();
-}
 
+scrape();
 export default scrape;

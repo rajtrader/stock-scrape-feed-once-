@@ -230,5 +230,5 @@ async function storeInWordPress(data) {
   }
 }
 
-  scrapeMonthly();
+scrapeMonthly();
 

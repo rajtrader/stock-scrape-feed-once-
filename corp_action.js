@@ -3,13 +3,14 @@ import { getStocksFromCSV } from './stocklist.js';
 import dotenv from 'dotenv';
 import axios from 'axios';
 const stocks = await getStocksFromCSV();
+//const stocks=['20Microns','360ONE']
 
 dotenv.config();
 const wpApiUrl = process.env.WP_API_CORP;
 
 async function scrapeDividendInfo() {
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true, 
     defaultViewport: null,
     timeout: 0,
     args: [
@@ -231,11 +232,6 @@ async function storeInWordPress(data) {
     return false;
   }
 }
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  scrapeDividendInfo().then(results => {
-    console.log("Scraping completed.");
-  });
-}
+scrapeDividendInfo();
 
 export { scrapeDividendInfo };
