@@ -1,16 +1,18 @@
-import puppeteer from 'puppeteer';
-import { getStocksFromCSV } from './stocklist.js';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth'
+puppeteer.use(StealthPlugin());
+import { getStockandNameFromCSV } from './Stockparse.js';
 import dotenv from 'dotenv'
 import axios from 'axios'
 //const stocks=[ '3m India',"20Microns"]
-const stocks = await getStocksFromCSV();
+const stocks = await getStockandNameFromCSV();
 dotenv.config();
 const wpApiUrl=process.env.WP_API_NEWS;
 
 async function scrapeStockNews() {
   console.log('Starting browser...');
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: false,
     defaultViewport: null,
     timeout: 0,
     args: [
@@ -18,8 +20,13 @@ async function scrapeStockNews() {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--single-process'
-    ]
+      '--single-process',
+      '--disable-extensions',
+      '--disable-blink-features=AutomationControlled', // Important
+    '--window-size=1920,1080'
+    ],
+           ignoreHTTPSErrors: true,
+
   });
   
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -46,8 +53,9 @@ async function scrapeStockNews() {
 
     const allResults = [];
     const currentYear = new Date().getFullYear();
-   
-    for (const stock of stocks) {
+    
+    for (const { stockName, stock } of stocks) {
+
       try {
         console.log(`🔍 Searching for stock: ${stock}`);
         
@@ -55,7 +63,7 @@ async function scrapeStockNews() {
         await delay(3000);
         
         // Click on the search bar
-        await page.waitForSelector('input.searchbar-input', { timeout: 30000 });
+        await page.waitForSelector('input.searchbar-input', { timeout: 60000 });
         await page.click('input.searchbar-input');
         await delay(1000);
         
@@ -72,7 +80,7 @@ async function scrapeStockNews() {
         
         // Wait longer for search results to appear and stabilize
         await delay(1000);
-        await page.waitForSelector('ion-item[button]', { timeout: 30000 });
+        await page.waitForSelector('ion-item[button]', { timeout: 60000 });
         
         // Click on the first stock result
         const clickedResult = await page.evaluate(() => {
@@ -98,7 +106,7 @@ async function scrapeStockNews() {
         console.log(`Clicked on stock: ${clickedResult}`);
 
         // Wait for navigation to complete - longer timeout
-        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 50000 });
+        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
         await delay(5000);
         
         // Get the current URL
@@ -108,7 +116,7 @@ async function scrapeStockNews() {
         if (!currentUrl.includes('section=news')) {
           const newsUrl = `${currentUrl.split('?')[0]}?section=news`;
           console.log(`Navigating to news section: ${newsUrl}`);
-          await page.goto(newsUrl, { waitUntil: 'networkidle2', timeout: 50000 });
+          await page.goto(newsUrl, { waitUntil: 'networkidle2', timeout: 60000 });
           await delay(5000);
         }
 
@@ -158,6 +166,7 @@ async function scrapeStockNews() {
             
             const wpData = { 
               stock: stock,
+              stockName:stockName,
               date: newsItem.date,
               content: newsItem.content
             };
@@ -178,7 +187,7 @@ async function scrapeStockNews() {
         }
         
       
-        allResults.push({ stock, newsItems });
+        allResults.push({ stock,stockName,newsItems });
         await delay(2000); // wait before next search
         
       } catch (error) {
@@ -207,6 +216,7 @@ async function storeInWordPress(data) {
   try {
     const response = await axios.post(wpApiUrl, {
       stock: data.stock,
+      stockName:data.stockName,
       date: data.date,
       content: data.content
     });
@@ -229,3 +239,4 @@ async function news() {
 }
 
 news();
+//489

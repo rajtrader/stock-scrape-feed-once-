@@ -112,8 +112,4 @@ async function storeInWordPress(data) {
 }
 
 
-if (process.argv[1] === import.meta.url) {
-  scrapeFPI();
-}
-
 export default scrapeFPI;

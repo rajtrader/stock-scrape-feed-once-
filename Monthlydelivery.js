@@ -1,9 +1,11 @@
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth'
+puppeteer.use(StealthPlugin());
 import dotenv from 'dotenv'
 import axios from 'axios'
-import { getStocksFromCSV } from './stocklist.js';
+import { getStockandNameFromCSV } from './Stockparse.js';
 
-const stocks = await getStocksFromCSV();
+const stocks = await getStockandNameFromCSV();
 //const stocks=['20 Microns']
 dotenv.config();
 const wpApiUrl=process.env.WP_API_MONTHLY;
@@ -14,19 +16,24 @@ const scrapeMonthly = async () => {
     defaultViewport: null,
     timeout: 0, 
     args: [
-      '--no-sandbox',
+       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--single-process'
-    ]
+      '--single-process',
+      '--disable-extensions',
+      '--disable-blink-features=AutomationControlled', // Important
+    '--window-size=1920,1080'
+    ],
+    ignoreHTTPSErrors: true,
+
   });
   
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   const page = await browser.newPage();
   
   await page.setUserAgent(
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
   );
   
   await page.setExtraHTTPHeaders({
@@ -41,7 +48,7 @@ const scrapeMonthly = async () => {
 
   await delay(5000);
 
-  for (const stock of stocks) {
+  for (const { stockName, stock } of stocks)  {
     let monthlyData = [];
     try {
       console.log(`Searching for stock: ${stock}`);
@@ -50,7 +57,7 @@ const scrapeMonthly = async () => {
       await delay(3000);
       
       // Click on the search bar
-      await page.waitForSelector('input.searchbar-input', { timeout: 30000 });
+      await page.waitForSelector('input.searchbar-input', { timeout: 60000 });
       await page.click('input.searchbar-input');
       await delay(1000);
       
@@ -67,7 +74,7 @@ const scrapeMonthly = async () => {
       
       // Wait longer for search results to appear and stabilize
       await delay(3000);
-      await page.waitForSelector('ion-item[button]', { timeout: 30000 });
+      await page.waitForSelector('ion-item[button]', { timeout: 60000 });
       await delay(2000);
       
       // Click on the first stock result
@@ -94,7 +101,7 @@ const scrapeMonthly = async () => {
       console.log(`Clicked on stock: ${clickedResult}`);
 
       // Wait for navigation to complete - longer timeout
-      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
+      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
       await delay(8000);
       
       // Get the current URL
@@ -105,12 +112,12 @@ const scrapeMonthly = async () => {
       if (!currentUrl.includes('section=deliveries')) {
         const deliveryUrl = `${currentUrl.split('?')[0]}?section=deliveries&exchange-name=Both&time-period=Monthly`;
         console.log(`Adding deliveries section: ${deliveryUrl}`);
-        await page.goto(deliveryUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+        await page.goto(deliveryUrl, { waitUntil: 'networkidle2', timeout: 60000 });
         await delay(4000);
       }
 
       try {
-        await page.waitForSelector('g.deld3bar > rect', { timeout: 20000 });
+        await page.waitForSelector('g.deld3bar > rect', { timeout: 60000 });
       } catch (e) {
         console.log("Could not find delivery bars, trying to continue anyway");
       }
@@ -123,7 +130,7 @@ const scrapeMonthly = async () => {
         // Create a Set to track unique months we've already processed
         const processedMonths = new Set();
         
-        for (let i = 1; i < 15; i++) {
+        for (let i = 1; i < 10; i++) {
           try {
             bars[i].dispatchEvent(new MouseEvent('click', { bubbles: true }));
             console.log(`Clicked bar ${i+1}`);
@@ -174,29 +181,34 @@ const scrapeMonthly = async () => {
         continue;
       }
       
-    
+      
       for (const monthData of monthlyData) {
         const wpData = { 
           stock: stock,
+          stockName:stockName,
           date: monthData.date,  
           deliveredQty: monthData.deliveredQty,
           tradedQty: monthData.tradedQty,
           vwap: monthData.vwap  
         };
         
-        const stored = await storeInWordPress(wpData);
-        if (stored) {
-          console.log(`Successfully stored "${stock}" data for ${monthData.date} in WordPress.`);
-        } else if(stored?.duplicate) {
-          console.log(`Skipped duplicate: "${stock}" data for ${monthData.date}`);
-        } else {
-          console.log(`Failed to store "${stock}" data for ${monthData.date} in WordPress.`);
+        try {
+          const stored = await storeInWordPress(wpData);
+          if (stored?.updated) {
+            console.log(`Updated "${stock}" data for ${monthData.date} in WordPress.`);
+          } else if (stored) {
+            console.log(`Successfully stored "${stock}" data for ${monthData.date} in WordPress.`);
+          } else {
+            console.log(`Failed to store "${stock}" data for ${monthData.date} in WordPress.`);
+          }
+        } catch (error) {
+          console.error(`API error for "${stock}" data on ${monthData.date}: ${error.message}`);
         }
         
-        await delay(1000); // Short delay between storing each month's data
+        await delay(2000); // Longer delay between storing each month's data to give WordPress time to process
       }
       
-      await delay(2000); // Wait before next search
+      await delay(3000); // Wait before next search
       
     } catch (error) {
       console.log(`Failed to extract data for ${stock}:`, error.message);
@@ -210,25 +222,30 @@ async function storeInWordPress(data) {
   try {
     const response = await axios.post(wpApiUrl, {
       stock: data.stock,
+      stockName:data.stockName,
       date: data.date,
       deliveredQty: data.deliveredQty,
       tradedQty: data.tradedQty,
       vwap: data.vwap
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000 // Increase timeout to 15 seconds
     });
 
-    console.log('Stored in WordPress:', response.data);
-    return true;
+    return response.data;
   } catch (error) {
-    console.error('WP API Error:', error.response?.data || error.message);
+    console.error('WP API Error:', error.response?.data?.message || error.message);
     
-    // Check if this is a duplicate entry error
-    if (error.response?.data?.message?.includes('already exists')) {
-      return { duplicate: true };
-    }
-    
-    return false;
+    // Return detailed error information
+    return {
+      error: true,
+      message: error.response?.data?.message || error.message
+    };
   }
 }
-
 scrapeMonthly();
 
+//Lloyds Engineering Works Ltd,LLOYDSENGG,"""https://in.tradingview.com/chart/2bVEvBAI/?symbol=NSE:LLOYDSENGG"""
+//244

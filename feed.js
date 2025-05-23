@@ -1,7 +1,10 @@
-import puppeteer from 'puppeteer';
-import { getStocksFromCSV } from './stocklist.js';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth'
+puppeteer.use(StealthPlugin());
 
-const stocks = await getStocksFromCSV();
+
+import { getStockandNameFromCSV } from './Stockparse.js';
+const stocks = await getStockandNameFromCSV();
 //const stocks=['20Microns','360ONE']
 import dotenv from 'dotenv'
 import axios from 'axios'
@@ -17,12 +20,17 @@ async function scrapeStockFeeds() {
     defaultViewport: null,
     timeout: 0,
     args: [
-      '--no-sandbox',
+ '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--single-process'
-    ]
+      '--single-process',
+      '--disable-extensions',
+      '--disable-blink-features=AutomationControlled', // Important
+    '--window-size=1920,1080'
+    ],
+    ignoreHTTPSErrors: true,
+
   });
   
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -52,7 +60,7 @@ async function scrapeStockFeeds() {
     const allResults = [];
    
   
-    for (const stock of stocks) {
+    for (const { stockName, stock } of stocks) {
       try {
         console.log(`Searching for stock: ${stock}`);
         
@@ -60,7 +68,7 @@ async function scrapeStockFeeds() {
         await delay(3000);
         
         // Click on the search bar
-        await page.waitForSelector('input.searchbar-input', { timeout: 30000 });
+        await page.waitForSelector('input.searchbar-input', { timeout: 60000 });
         await page.click('input.searchbar-input');
         await delay(1000);
         
@@ -77,7 +85,7 @@ async function scrapeStockFeeds() {
         
         // Wait longer for search results to appear and stabilize
         await delay(3000);
-        await page.waitForSelector('ion-item[button]', { timeout: 30000 });
+        await page.waitForSelector('ion-item[button]', { timeout: 60000 });
         await delay(2000);
         
         // Click on the first stock result
@@ -104,7 +112,7 @@ async function scrapeStockFeeds() {
         console.log(` Clicked on stock: ${clickedResult}`);
 
         // Wait for navigation to complete - longer timeout
-        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
+        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
         await delay(8000);
         
         // Get the current URL
@@ -115,14 +123,14 @@ async function scrapeStockFeeds() {
         if (!currentUrl.includes('section=feeds')) {
           const feedsUrl = `${currentUrl.split('?')[0]}?section=feeds`;
           console.log(` Navigating to feeds section: ${feedsUrl}`);
-          await page.goto(feedsUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+          await page.goto(feedsUrl, { waitUntil: 'networkidle2', timeout: 60000 });
           await delay(5000);
         }
 
         // Wait for feed items to load
         console.log('Waiting for feed items to load...');
         try {
-          await page.waitForSelector('ion-item.item', { timeout: 20000 });
+          await page.waitForSelector('ion-item.item', { timeout: 60000 });
         } catch (e) {
           console.log("Could not find feed items, trying to continue anyway");
         }
@@ -161,6 +169,7 @@ async function scrapeStockFeeds() {
         
         if (feedItems && feedItems.length > 0) {
           console.log(`\n===== FEED ITEMS FOR ${stock} =====`);
+          console.log(stockName)
           feedItems.forEach((item, index) => {
             console.log(`\nItem #${index + 1}:`);
             console.log(`Date: ${item.date}`);
@@ -177,6 +186,7 @@ async function scrapeStockFeeds() {
           for (const [index, item] of feedItems.entries()) {
             const wpData = { 
               stock: stock,
+              stockName:stockName,
               date: item.date, 
               source: item.source,
               content: item.content,
@@ -202,7 +212,7 @@ async function scrapeStockFeeds() {
         }
         
     
-        allResults.push({ stock, feedItems });
+        allResults.push({ stock,stockName, feedItems });
         await delay(2000); // wait before next search
         
       } catch (error) {
@@ -230,6 +240,7 @@ async function storeInWordPress(data) {
     console.log('Sending to WordPress API...');
     const response = await axios.post(wpApiUrl, {
       stock: data.stock,
+      stockName:data.stockName,
       date: data.date,
       source: data.source,
       content: data.content
@@ -253,3 +264,4 @@ async function feed() {
 }
 
 feed()
+//367

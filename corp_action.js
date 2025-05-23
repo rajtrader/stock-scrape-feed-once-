@@ -10,7 +10,7 @@ const wpApiUrl = process.env.WP_API_CORP;
 
 async function scrapeDividendInfo() {
   const browser = await puppeteer.launch({
-    headless: true, 
+    headless: false, 
     defaultViewport: null,
     timeout: 0,
     args: [
@@ -235,3 +235,4 @@ async function storeInWordPress(data) {
 scrapeDividendInfo();
 
 export { scrapeDividendInfo };
+//1402

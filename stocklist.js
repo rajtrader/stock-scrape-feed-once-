@@ -1,8 +1,5 @@
 import fs from 'fs'
 import csv from 'csv-parser';
-
-
-
 function getStocksFromCSV() {
   return new Promise((resolve, reject) => {
     const stocks = [];

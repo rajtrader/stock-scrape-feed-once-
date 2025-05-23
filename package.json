@@ -5,7 +5,7 @@
   "main": "daily2.js",
   "type": "module",
   "scripts": {
-    "start":"node index.js",
+    "start": "node feed.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -16,6 +16,8 @@
     "csv-parser": "^3.2.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "puppeteer": "^24.7.2"
+    "puppeteer": "^24.7.2",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   }
 }
